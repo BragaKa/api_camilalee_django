@@ -1,0 +1,6 @@
+# Dependências para testes (inclui as de execução)
+-r requirements.txt
+pytest~=9.2.0
+pytest-django~=4.14.0
+pytest-env~=1.8.8
+requests~=2.34.2
