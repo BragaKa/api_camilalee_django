@@ -1,0 +1,2754 @@
+openapi: 3.0.3
+info:
+  title: Camila Lee API
+  version: 1.0.0
+  description: |-
+    API REST do site da profissional Camila Lee (Crocodilo Lee), reimplementada em **Python/Django REST Framework** para a disciplina Programação para Internet (TSI/IFB).
+
+    ## Como autenticar
+    1. Cadastre-se em `POST /api/auth/cadastro` (ou use uma conta existente).
+    2. Faça login em `POST /api/auth/login` e copie o valor de `access`.
+    3. Clique em **Authorize** (cadeado) e cole o token. O Swagger envia o cabeçalho `Authorization: Bearer <token>` nas próximas chamadas.
+
+    ## Perfis
+    - `USUARIO`: acessa e gerencia apenas as próprias mensagens e o próprio cadastro.
+    - `ADMIN`: gerencia depoimentos, usuários e consulta o histórico de logins.
+
+    ## Formato dos erros
+    Todas as respostas de erro seguem o formato `{"status": 400, "erro": "Requisição inválida", "mensagem": "...", "detalhes": {"campo": ["motivo"]}}`.
+
+    ## Limites de uso
+    Login, cadastro e recuperação de senha têm limite de requisições por IP (HTTP 429 quando excedido).
+paths:
+  /api/admin/logins:
+    get:
+      operationId: admin_logins_list
+      description: |-
+        Lista paginada dos acessos (sucessos e falhas). Filtros: `status` (SUCESSO/FALHA), `usuario` (id), `data_inicio` e `data_fim` (AAAA-MM-DD). Busca (`search`) por nome, e-mail, IP, navegador ou sistema. Ordenação (`ordering`): `data_hora`, `status`.
+
+        **Autenticação:** exige `Bearer` token de ADMIN.
+      summary: Listar o histórico de logins
+      parameters:
+      - in: query
+        name: data_fim
+        schema:
+          type: string
+          format: date
+        description: AAAA-MM-DD (inclusive).
+      - in: query
+        name: data_inicio
+        schema:
+          type: string
+          format: date
+        description: AAAA-MM-DD (inclusive).
+      - name: ordering
+        required: false
+        in: query
+        description: Qual campo usar ao ordenar os resultados.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: Um número de página dentro do conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a serem retornados por página.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: Um termo de busca.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - FALHA
+          - SUCESSO
+        description: |-
+          * `SUCESSO` - Sucesso
+          * `FALHA` - Falha
+      - in: query
+        name: usuario
+        schema:
+          type: integer
+      tags:
+      - Administração
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedHistoricoLoginList'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+  /api/admin/logins/resumo:
+    get:
+      operationId: admin_logins_resumo_retrieve
+      description: |-
+        Totais de logins, sucessos, falhas e último acesso bem-sucedido no período (padrão: 30 dias).
+
+        **Autenticação:** exige `Bearer` token de ADMIN.
+      summary: Indicadores de acesso
+      parameters:
+      - in: query
+        name: dias
+        schema:
+          type: integer
+          default: 30
+        description: 'Período em dias (1 a 365). Padrão: 30.'
+      tags:
+      - Administração
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumoLogins'
+              examples:
+                Resumo:
+                  value:
+                    periodo_dias: 30
+                    total_logins: 42
+                    logins_realizados: 38
+                    falhas_de_login: 4
+                    ultimo_acesso: '2026-11-24T18:30:00-03:00'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+  /api/admin/usuarios:
+    get:
+      operationId: admin_usuarios_list
+      description: |-
+        Lista paginada de usuários. Filtros: `perfil`, `is_active`. Busca (`search`) por nome ou e-mail. Ordenação (`ordering`): `nome`, `email`, `criado_em`, `id` (prefixe com `-` para decrescente).
+
+        **Autenticação:** exige `Bearer` token de ADMIN.
+      summary: Listar usuários
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Qual campo usar ao ordenar os resultados.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: Um número de página dentro do conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a serem retornados por página.
+        schema:
+          type: integer
+      - in: query
+        name: perfil
+        schema:
+          type: string
+        description: ADMIN ou USUARIO.
+      - name: search
+        required: false
+        in: query
+        description: Um termo de busca.
+        schema:
+          type: string
+      tags:
+      - Administração
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAdminUsuarioList'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+  /api/admin/usuarios/{id}:
+    get:
+      operationId: admin_usuarios_retrieve
+      description: '**Autenticação:** exige `Bearer` token de ADMIN.'
+      summary: Consultar um usuário
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este usuario.
+        required: true
+      tags:
+      - Administração
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUsuario'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+    put:
+      operationId: admin_usuarios_update
+      description: |-
+        Altera nome, telefone, perfil e situação (`is_active`). O e-mail não é editável. Um ADMIN não pode rebaixar o próprio perfil.
+
+        **Autenticação:** exige `Bearer` token de ADMIN.
+      summary: Atualizar um usuário (completo)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este usuario.
+        required: true
+      tags:
+      - Administração
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUsuarioRequest'
+            examples:
+              Requisição:
+                value:
+                  nome: Maria Souza
+                  telefone: '61999999999'
+                  perfil: ADMIN
+                  is_active: true
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUsuario'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+    patch:
+      operationId: admin_usuarios_partial_update
+      description: '**Autenticação:** exige `Bearer` token de ADMIN.'
+      summary: Atualizar um usuário (parcial)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este usuario.
+        required: true
+      tags:
+      - Administração
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUsuarioRequest'
+            examples:
+              PromoverAADMIN:
+                value:
+                  perfil: ADMIN
+                summary: Promover a ADMIN
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUsuario'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+    delete:
+      operationId: admin_usuarios_destroy
+      description: |-
+        Remove o usuário e suas mensagens. Um ADMIN não pode excluir a si mesmo por aqui (use `DELETE /api/usuarios/me`).
+
+        **Autenticação:** exige `Bearer` token de ADMIN.
+      summary: Excluir um usuário
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este usuario.
+        required: true
+      tags:
+      - Administração
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+  /api/auth/cadastro:
+    post:
+      operationId: auth_cadastro_create
+      description: |-
+        Cria uma conta com perfil `USUARIO`. A senha é armazenada apenas como hash. O perfil não pode ser escolhido pelo cliente (somente um ADMIN altera perfis).
+
+        **Autenticação:** não exige token.
+      summary: Cadastrar usuário
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CadastroRequest'
+            examples:
+              Requisição:
+                value:
+                  nome: Maria Souza
+                  email: maria@email.com
+                  telefone: '61999999999'
+                  senha: Senha@Forte2026
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+              examples:
+                UsuárioCriado:
+                  value:
+                    id: 7
+                    nome: Maria Souza
+                    email: maria@email.com
+                    telefone: '61999999999'
+                    perfil: USUARIO
+                    criado_em: '2026-11-24T18:30:00-03:00'
+                  summary: Usuário criado
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                E-mailDuplicado:
+                  value:
+                    status: 409
+                    erro: Conflito
+                    mensagem: Já existe um usuário cadastrado com este e-mail.
+                  summary: E-mail duplicado
+          description: 'Conflito: o recurso já existe.'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                LimiteExcedido:
+                  value:
+                    status: 429
+                    erro: Muitas requisições
+                    mensagem: Pedido foi limitado (throttled). Disponível novamente
+                      em 42 segundos.
+                  summary: Limite excedido
+          description: 'Muitas requisições: limite de uso por IP excedido (veja o
+            cabeçalho Retry-After).'
+  /api/auth/esqueci-senha:
+    post:
+      operationId: auth_esqueci_senha_create
+      description: |-
+        Envia por e-mail um código de 6 dígitos (uso único, validade de 15 minutos). A resposta é **sempre a mesma**, exista ou não o e-mail, para não revelar quais contas existem.
+
+        **Autenticação:** não exige token. Limite: 5 por hora por IP.
+      summary: Solicitar código de recuperação de senha
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EsqueciSenhaRequest'
+            examples:
+              Requisição:
+                value:
+                  email: maria@email.com
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MensagemSimples'
+              examples:
+                Resposta:
+                  value:
+                    mensagem: Se o e-mail estiver cadastrado, enviaremos um código
+                      de 6 dígitos.
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                LimiteExcedido:
+                  value:
+                    status: 429
+                    erro: Muitas requisições
+                    mensagem: Pedido foi limitado (throttled). Disponível novamente
+                      em 42 segundos.
+                  summary: Limite excedido
+          description: 'Muitas requisições: limite de uso por IP excedido (veja o
+            cabeçalho Retry-After).'
+  /api/auth/login:
+    post:
+      operationId: auth_login_create
+      description: |-
+        Valida e-mail e senha e devolve os tokens JWT. Cada tentativa (com sucesso ou falha) é registrada no histórico de logins (IP, sistema, navegador, dispositivo).
+
+        **Autenticação:** não exige token. Limite: 10 tentativas por minuto por IP.
+      summary: Fazer login
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              Requisição:
+                value:
+                  email: maria@email.com
+                  senha: Senha@Forte2026
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResposta'
+              examples:
+                LoginRealizado:
+                  value:
+                    access: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    refresh: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    token_type: Bearer
+                    expires_in: 1800
+                    usuario:
+                      id: 7
+                      nome: Maria Souza
+                      email: maria@email.com
+                      telefone: '61999999999'
+                      perfil: USUARIO
+                      criado_em: '2026-11-24T18:30:00-03:00'
+                  summary: Login realizado
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                CredenciaisInválidas:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: E-mail ou senha inválidos.
+                  summary: Credenciais inválidas
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                LimiteExcedido:
+                  value:
+                    status: 429
+                    erro: Muitas requisições
+                    mensagem: Pedido foi limitado (throttled). Disponível novamente
+                      em 42 segundos.
+                  summary: Limite excedido
+          description: 'Muitas requisições: limite de uso por IP excedido (veja o
+            cabeçalho Retry-After).'
+  /api/auth/logout:
+    post:
+      operationId: auth_logout_create
+      description: |-
+        Invalida o token `refresh` informado (lista de bloqueio). O token de acesso atual expira sozinho em poucos minutos.
+
+        **Autenticação:** exige `Bearer` token.
+      summary: Encerrar sessão (logout)
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+            examples:
+              Requisição:
+                value:
+                  refresh: eyJhbGciOi...
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+  /api/auth/redefinir-senha:
+    post:
+      operationId: auth_redefinir_senha_create
+      description: |-
+        Define uma nova senha usando o código de 6 dígitos enviado por e-mail. O código só vale uma vez e expira. Após a troca, todos os tokens `refresh` do usuário são invalidados.
+
+        **Autenticação:** não exige token. Limite: 10 por hora por IP.
+      summary: Redefinir a senha com o código recebido
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedefinirSenhaRequest'
+            examples:
+              Requisição:
+                value:
+                  email: maria@email.com
+                  codigo: '482913'
+                  nova_senha: NovaSenha@2026
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MensagemSimples'
+              examples:
+                SenhaRedefinida:
+                  value:
+                    mensagem: Senha redefinida com sucesso.
+                  summary: Senha redefinida
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                LimiteExcedido:
+                  value:
+                    status: 429
+                    erro: Muitas requisições
+                    mensagem: Pedido foi limitado (throttled). Disponível novamente
+                      em 42 segundos.
+                  summary: Limite excedido
+          description: 'Muitas requisições: limite de uso por IP excedido (veja o
+            cabeçalho Retry-After).'
+  /api/auth/refresh:
+    post:
+      operationId: auth_refresh_create
+      description: |-
+        Troca um token `refresh` válido por um novo par `access`/`refresh`. O `refresh` antigo é invalidado (rotação de tokens).
+
+        **Autenticação:** não exige token de acesso.
+      summary: Renovar token de acesso
+      tags:
+      - Autenticação
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+            examples:
+              Requisição:
+                value:
+                  refresh: eyJhbGciOi...
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokensRenovados'
+              examples:
+                TokensRenovados:
+                  value:
+                    access: eyJhbGciOi...
+                    refresh: eyJhbGciOi...
+                  summary: Tokens renovados
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+  /api/depoimentos:
+    get:
+      operationId: depoimentos_list
+      description: |-
+        Lista paginada, **pública** (não exige autenticação).
+
+        Filtros: `profissao` (contém), `data_inicio`, `data_fim` (AAAA-MM-DD). Busca (`search`) em nome, profissão ou texto. Ordenação (`ordering`): `criado_em`, `nome_autor`, `id`. Paginação: `page` e `page_size` (máx. 100).
+      summary: Listar depoimentos
+      parameters:
+      - in: query
+        name: data_fim
+        schema:
+          type: string
+          format: date
+        description: AAAA-MM-DD (inclusive).
+      - in: query
+        name: data_inicio
+        schema:
+          type: string
+          format: date
+        description: AAAA-MM-DD (inclusive).
+      - name: ordering
+        required: false
+        in: query
+        description: Qual campo usar ao ordenar os resultados.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: Um número de página dentro do conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a serem retornados por página.
+        schema:
+          type: integer
+      - in: query
+        name: profissao
+        schema:
+          type: string
+        description: Parte da profissão (sem diferenciar maiúsculas).
+      - name: search
+        required: false
+        in: query
+        description: Um termo de busca.
+        schema:
+          type: string
+      tags:
+      - Depoimentos
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDepoimentoList'
+          description: ''
+    post:
+      operationId: depoimentos_create
+      description: |-
+        Somente ADMIN.
+
+        **Autenticação:** exige `Bearer` token de um usuário **ADMIN**.
+      summary: Cadastrar depoimento
+      tags:
+      - Depoimentos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepoimentoRequest'
+            examples:
+              Requisição:
+                value:
+                  nome_autor: Ana Paula
+                  profissao: Noiva
+                  texto: Atendimento incrível! Minha maquiagem durou a festa inteira.
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Depoimento'
+              examples:
+                DepoimentoCriado:
+                  value:
+                    id: 3
+                    nome_autor: Ana Paula
+                    profissao: Noiva
+                    texto: Atendimento incrível! Minha maquiagem durou a festa inteira.
+                    criado_em: '2026-11-24T18:50:00-03:00'
+                  summary: Depoimento criado
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+  /api/depoimentos/{id}:
+    get:
+      operationId: depoimentos_retrieve
+      description: Público (não exige autenticação).
+      summary: Consultar um depoimento
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este depoimento.
+        required: true
+      tags:
+      - Depoimentos
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Depoimento'
+              examples:
+                Depoimento:
+                  value:
+                    id: 3
+                    nome_autor: Ana Paula
+                    profissao: Noiva
+                    texto: Atendimento incrível! Minha maquiagem durou a festa inteira.
+                    criado_em: '2026-11-24T18:50:00-03:00'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+    put:
+      operationId: depoimentos_update
+      description: |-
+        Somente ADMIN.
+
+        **Autenticação:** exige `Bearer` token de um usuário **ADMIN**.
+      summary: Atualizar depoimento (completo)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este depoimento.
+        required: true
+      tags:
+      - Depoimentos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepoimentoRequest'
+            examples:
+              Requisição:
+                value:
+                  nome_autor: Ana Paula
+                  profissao: Noiva
+                  texto: Atendimento incrível! Minha maquiagem durou a festa inteira.
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Depoimento'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+    patch:
+      operationId: depoimentos_partial_update
+      description: |-
+        Somente ADMIN.
+
+        **Autenticação:** exige `Bearer` token de um usuário **ADMIN**.
+      summary: Atualizar depoimento (parcial)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este depoimento.
+        required: true
+      tags:
+      - Depoimentos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDepoimentoRequest'
+            examples:
+              Requisição:
+                value:
+                  profissao: Atriz
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Depoimento'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+    delete:
+      operationId: depoimentos_destroy
+      description: |-
+        Somente ADMIN.
+
+        **Autenticação:** exige `Bearer` token de um usuário **ADMIN**.
+      summary: Excluir depoimento
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este depoimento.
+        required: true
+      tags:
+      - Depoimentos
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                PerfilInsuficiente:
+                  value:
+                    status: 403
+                    erro: Acesso negado
+                    mensagem: Acesso restrito a administradores.
+                  summary: Perfil insuficiente
+          description: 'Acesso negado: o usuário autenticado não tem permissão (perfil
+            insuficiente).'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+  /api/mensagens:
+    get:
+      operationId: mensagens_list
+      description: |-
+        Lista paginada. Um `USUARIO` vê só as próprias mensagens; um `ADMIN` vê todas.
+
+        Filtros: `servico`, `usuario` (id), `data_inicio`, `data_fim` (AAAA-MM-DD). Busca (`search`) no texto da mensagem ou no nome do remetente. Ordenação (`ordering`): `enviado_em`, `servico`, `id` (prefixe com `-` para decrescente). Paginação: `page` e `page_size` (máx. 100).
+
+        **Autenticação:** exige `Bearer` token.
+      summary: Listar mensagens
+      parameters:
+      - in: query
+        name: data_fim
+        schema:
+          type: string
+          format: date
+        description: AAAA-MM-DD (inclusive).
+      - in: query
+        name: data_inicio
+        schema:
+          type: string
+          format: date
+        description: AAAA-MM-DD (inclusive).
+      - name: ordering
+        required: false
+        in: query
+        description: Qual campo usar ao ordenar os resultados.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: Um número de página dentro do conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a serem retornados por página.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: Um termo de busca.
+        schema:
+          type: string
+      - in: query
+        name: servico
+        schema:
+          type: string
+          enum:
+          - AUDIOVISUAL
+          - CARACTERIZACAO
+          - CORTE_CABELO
+          - NOIVAS
+          - OUTROS
+        description: |-
+          * `NOIVAS` - Noivas
+          * `AUDIOVISUAL` - Audiovisual
+          * `CORTE_CABELO` - Corte de cabelo
+          * `CARACTERIZACAO` - Caracterização
+          * `OUTROS` - Outros
+      - in: query
+        name: usuario
+        schema:
+          type: integer
+      tags:
+      - Mensagens
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMensagemList'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+    post:
+      operationId: mensagens_create
+      description: |-
+        Registra uma mensagem/solicitação de serviço. O remetente é sempre o usuário autenticado (não é enviado no corpo).
+
+        **Autenticação:** exige `Bearer` token.
+      summary: Enviar mensagem
+      tags:
+      - Mensagens
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MensagemRequest'
+            examples:
+              Requisição:
+                value:
+                  servico: NOIVAS
+                  mensagem: Olá! Gostaria de um orçamento de maquiagem e penteado
+                    para 14/03.
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mensagem'
+              examples:
+                MensagemCriada:
+                  value:
+                    id: 12
+                    servico: NOIVAS
+                    mensagem: Olá! Gostaria de um orçamento de maquiagem e penteado
+                      para 14/03.
+                    enviado_em: '2026-11-24T18:45:00-03:00'
+                    usuario_id: 7
+                    usuario_nome: Maria Souza
+                  summary: Mensagem criada
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+  /api/mensagens/{id}:
+    get:
+      operationId: mensagens_retrieve
+      description: |-
+        Retorna 404 se a mensagem não existir ou pertencer a outro usuário (exceto ADMIN).
+
+        **Autenticação:** exige `Bearer` token.
+      summary: Consultar uma mensagem
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este mensagem.
+        required: true
+      tags:
+      - Mensagens
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mensagem'
+              examples:
+                Mensagem:
+                  value:
+                    id: 12
+                    servico: NOIVAS
+                    mensagem: Olá! Gostaria de um orçamento de maquiagem e penteado
+                      para 14/03.
+                    enviado_em: '2026-11-24T18:45:00-03:00'
+                    usuario_id: 7
+                    usuario_nome: Maria Souza
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+    put:
+      operationId: mensagens_update
+      description: |-
+        O autor (ou um ADMIN) pode substituir `servico` e `mensagem`.
+
+        **Autenticação:** exige `Bearer` token.
+      summary: Atualizar mensagem (completo)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este mensagem.
+        required: true
+      tags:
+      - Mensagens
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MensagemRequest'
+            examples:
+              Requisição:
+                value:
+                  servico: NOIVAS
+                  mensagem: Olá! Gostaria de um orçamento de maquiagem e penteado
+                    para 14/03.
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mensagem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+    patch:
+      operationId: mensagens_partial_update
+      description: |-
+        Altera apenas os campos enviados.
+
+        **Autenticação:** exige `Bearer` token.
+      summary: Atualizar mensagem (parcial)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este mensagem.
+        required: true
+      tags:
+      - Mensagens
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMensagemRequest'
+            examples:
+              Requisição:
+                value:
+                  servico: AUDIOVISUAL
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mensagem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+    delete:
+      operationId: mensagens_destroy
+      description: |-
+        O autor (ou um ADMIN) pode excluir.
+
+        **Autenticação:** exige `Bearer` token.
+      summary: Excluir mensagem
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este mensagem.
+        required: true
+      tags:
+      - Mensagens
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                RegistroInexistente:
+                  value:
+                    status: 404
+                    erro: Não encontrado
+                    mensagem: Não encontrado.
+                  summary: Registro inexistente
+          description: Registro inexistente (ou que não pertence ao usuário autenticado).
+  /api/saude:
+    get:
+      operationId: saude_retrieve
+      description: Não exige autenticação. Retorna HTTP 200 quando a aplicação responde.
+      summary: Verifica se a API está no ar
+      tags:
+      - Sistema
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Saude'
+              examples:
+                APIDisponível:
+                  value:
+                    status: ok
+                  summary: API disponível
+          description: ''
+  /api/usuarios/me:
+    get:
+      operationId: usuarios_me_retrieve
+      description: '**Autenticação:** exige `Bearer` token.'
+      summary: Consultar o próprio perfil
+      tags:
+      - Usuários
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+              examples:
+                Usuário:
+                  value:
+                    id: 7
+                    nome: Maria Souza
+                    email: maria@email.com
+                    telefone: '61999999999'
+                    perfil: USUARIO
+                    criado_em: '2026-11-24T18:30:00-03:00'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+    put:
+      operationId: usuarios_me_update
+      description: |-
+        Substitui `nome` e `telefone`. O e-mail e o perfil não podem ser alterados.
+
+        **Autenticação:** exige `Bearer` token.
+      summary: Atualizar o próprio cadastro (completo)
+      tags:
+      - Usuários
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioAtualizacaoRequest'
+            examples:
+              Requisição:
+                value:
+                  nome: Maria S. Souza
+                  telefone: (61) 98888-7777
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+    patch:
+      operationId: usuarios_me_partial_update
+      description: |-
+        Altera apenas os campos enviados.
+
+        **Autenticação:** exige `Bearer` token.
+      summary: Atualizar o próprio cadastro (parcial)
+      tags:
+      - Usuários
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUsuarioAtualizacaoRequest'
+            examples:
+              Requisição:
+                value:
+                  telefone: '61988887777'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                ErroDeValidação:
+                  value:
+                    status: 400
+                    erro: Requisição inválida
+                    mensagem: Os dados enviados são inválidos.
+                    detalhes:
+                      campo:
+                      - Este campo é obrigatório.
+                  summary: Erro de validação
+          description: 'Requisição inválida: campo obrigatório ausente, tipo incorreto
+            ou valor fora das regras.'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+    delete:
+      operationId: usuarios_me_destroy
+      description: |-
+        Remove a conta e as mensagens do usuário. O histórico de logins é mantido, sem vínculo com o usuário.
+
+        **Autenticação:** exige `Bearer` token.
+      summary: Excluir a própria conta
+      tags:
+      - Usuários
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                SemToken:
+                  value:
+                    status: 401
+                    erro: Não autenticado
+                    mensagem: As credenciais de autenticação não foram fornecidas.
+                  summary: Sem token
+          description: 'Não autenticado: token ausente, inválido ou expirado.'
+components:
+  schemas:
+    AdminUsuario:
+      type: object
+      description: ModelSerializer que usa TextoEstrito para todos os campos de texto
+        do modelo.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nome:
+          type: string
+          maxLength: 120
+          minLength: 2
+        email:
+          type: string
+          format: email
+          readOnly: true
+        telefone:
+          type: string
+          maxLength: 30
+        perfil:
+          type: string
+          description: ADMIN ou USUARIO.
+        is_active:
+          type: boolean
+        criado_em:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - criado_em
+      - email
+      - id
+      - nome
+      - perfil
+      - telefone
+    AdminUsuarioRequest:
+      type: object
+      description: ModelSerializer que usa TextoEstrito para todos os campos de texto
+        do modelo.
+      properties:
+        nome:
+          type: string
+          minLength: 2
+          maxLength: 120
+        telefone:
+          type: string
+          minLength: 1
+          maxLength: 30
+        perfil:
+          type: string
+          minLength: 1
+          description: ADMIN ou USUARIO.
+        is_active:
+          type: boolean
+      required:
+      - nome
+      - perfil
+      - telefone
+    CadastroRequest:
+      type: object
+      properties:
+        nome:
+          type: string
+          minLength: 2
+          description: Nome completo.
+          maxLength: 120
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: Usado como login. Deve ser único.
+          maxLength: 180
+        telefone:
+          type: string
+          minLength: 1
+          description: 'Telefone com DDD, ex.: 61999999999 ou (61) 99999-9999.'
+          maxLength: 30
+        senha:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Mínimo de 8 caracteres; não pode ser comum nem só numérica.
+          maxLength: 128
+      required:
+      - email
+      - nome
+      - senha
+      - telefone
+    Depoimento:
+      type: object
+      description: ModelSerializer que usa TextoEstrito para todos os campos de texto
+        do modelo.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nome_autor:
+          type: string
+          description: Nome do cliente (até 120 caracteres).
+          maxLength: 120
+        profissao:
+          type: string
+          description: 'Profissão ou qualificação, ex.: Noiva, Atriz.'
+          maxLength: 120
+        texto:
+          type: string
+          description: Conteúdo do depoimento (até 2000 caracteres).
+          maxLength: 2000
+        criado_em:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - criado_em
+      - id
+      - nome_autor
+      - profissao
+      - texto
+    DepoimentoRequest:
+      type: object
+      description: ModelSerializer que usa TextoEstrito para todos os campos de texto
+        do modelo.
+      properties:
+        nome_autor:
+          type: string
+          minLength: 1
+          description: Nome do cliente (até 120 caracteres).
+          maxLength: 120
+        profissao:
+          type: string
+          minLength: 1
+          description: 'Profissão ou qualificação, ex.: Noiva, Atriz.'
+          maxLength: 120
+        texto:
+          type: string
+          minLength: 1
+          description: Conteúdo do depoimento (até 2000 caracteres).
+          maxLength: 2000
+      required:
+      - nome_autor
+      - profissao
+      - texto
+    Erro:
+      type: object
+      description: Formato padrão de todas as respostas de erro da API (usado na documentação).
+      properties:
+        status:
+          type: integer
+          description: Código HTTP do erro.
+        erro:
+          type: string
+          description: Título curto do erro.
+        mensagem:
+          type: string
+          description: Explicação legível do problema.
+        detalhes:
+          type: object
+          additionalProperties: {}
+          description: Erros por campo (somente em erros de validação).
+      required:
+      - erro
+      - mensagem
+      - status
+    EsqueciSenhaRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 180
+      required:
+      - email
+    HistoricoLogin:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        usuario:
+          type: integer
+          readOnly: true
+          nullable: true
+        usuario_nome:
+          type: string
+          readOnly: true
+        usuario_email:
+          type: string
+          readOnly: true
+        ip:
+          type: string
+          readOnly: true
+        sistema_operacional:
+          type: string
+          readOnly: true
+        navegador:
+          type: string
+          readOnly: true
+        dispositivo:
+          type: string
+          readOnly: true
+        localizacao:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        data_hora:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - data_hora
+      - dispositivo
+      - id
+      - ip
+      - localizacao
+      - navegador
+      - sistema_operacional
+      - status
+      - usuario
+      - usuario_email
+      - usuario_nome
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 180
+        senha:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+      required:
+      - email
+      - senha
+    LoginResposta:
+      type: object
+      properties:
+        access:
+          type: string
+          description: 'Token de acesso (enviar em Authorization: Bearer).'
+        refresh:
+          type: string
+          description: Token para renovar o acesso e para o logout.
+        token_type:
+          type: string
+          default: Bearer
+        expires_in:
+          type: integer
+          description: Validade do token de acesso, em segundos.
+        usuario:
+          $ref: '#/components/schemas/Usuario'
+      required:
+      - access
+      - expires_in
+      - refresh
+      - usuario
+    LogoutRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+          description: Token de atualização a ser invalidado.
+      required:
+      - refresh
+    Mensagem:
+      type: object
+      description: ModelSerializer que usa TextoEstrito para todos os campos de texto
+        do modelo.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        servico:
+          allOf:
+          - $ref: '#/components/schemas/ServicoEnum'
+          description: |-
+            Serviço de interesse: NOIVAS, AUDIOVISUAL, CORTE_CABELO, CARACTERIZACAO, OUTROS.
+
+            * `NOIVAS` - Noivas
+            * `AUDIOVISUAL` - Audiovisual
+            * `CORTE_CABELO` - Corte de cabelo
+            * `CARACTERIZACAO` - Caracterização
+            * `OUTROS` - Outros
+        mensagem:
+          type: string
+          description: Texto da mensagem (até 1000 caracteres).
+          maxLength: 1000
+        enviado_em:
+          type: string
+          format: date-time
+          readOnly: true
+        usuario_id:
+          type: integer
+          readOnly: true
+          description: Quem enviou a mensagem.
+        usuario_nome:
+          type: string
+          readOnly: true
+      required:
+      - enviado_em
+      - id
+      - mensagem
+      - servico
+      - usuario_id
+      - usuario_nome
+    MensagemRequest:
+      type: object
+      description: ModelSerializer que usa TextoEstrito para todos os campos de texto
+        do modelo.
+      properties:
+        servico:
+          allOf:
+          - $ref: '#/components/schemas/ServicoEnum'
+          description: |-
+            Serviço de interesse: NOIVAS, AUDIOVISUAL, CORTE_CABELO, CARACTERIZACAO, OUTROS.
+
+            * `NOIVAS` - Noivas
+            * `AUDIOVISUAL` - Audiovisual
+            * `CORTE_CABELO` - Corte de cabelo
+            * `CARACTERIZACAO` - Caracterização
+            * `OUTROS` - Outros
+        mensagem:
+          type: string
+          minLength: 1
+          description: Texto da mensagem (até 1000 caracteres).
+          maxLength: 1000
+      required:
+      - mensagem
+      - servico
+    MensagemSimples:
+      type: object
+      description: Resposta padrão com uma mensagem de texto.
+      properties:
+        mensagem:
+          type: string
+      required:
+      - mensagem
+    PaginatedAdminUsuarioList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUsuario'
+    PaginatedDepoimentoList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Depoimento'
+    PaginatedHistoricoLoginList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoricoLogin'
+    PaginatedMensagemList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mensagem'
+    PatchedAdminUsuarioRequest:
+      type: object
+      description: ModelSerializer que usa TextoEstrito para todos os campos de texto
+        do modelo.
+      properties:
+        nome:
+          type: string
+          minLength: 2
+          maxLength: 120
+        telefone:
+          type: string
+          minLength: 1
+          maxLength: 30
+        perfil:
+          type: string
+          minLength: 1
+          description: ADMIN ou USUARIO.
+        is_active:
+          type: boolean
+    PatchedDepoimentoRequest:
+      type: object
+      description: ModelSerializer que usa TextoEstrito para todos os campos de texto
+        do modelo.
+      properties:
+        nome_autor:
+          type: string
+          minLength: 1
+          description: Nome do cliente (até 120 caracteres).
+          maxLength: 120
+        profissao:
+          type: string
+          minLength: 1
+          description: 'Profissão ou qualificação, ex.: Noiva, Atriz.'
+          maxLength: 120
+        texto:
+          type: string
+          minLength: 1
+          description: Conteúdo do depoimento (até 2000 caracteres).
+          maxLength: 2000
+    PatchedMensagemRequest:
+      type: object
+      description: ModelSerializer que usa TextoEstrito para todos os campos de texto
+        do modelo.
+      properties:
+        servico:
+          allOf:
+          - $ref: '#/components/schemas/ServicoEnum'
+          description: |-
+            Serviço de interesse: NOIVAS, AUDIOVISUAL, CORTE_CABELO, CARACTERIZACAO, OUTROS.
+
+            * `NOIVAS` - Noivas
+            * `AUDIOVISUAL` - Audiovisual
+            * `CORTE_CABELO` - Corte de cabelo
+            * `CARACTERIZACAO` - Caracterização
+            * `OUTROS` - Outros
+        mensagem:
+          type: string
+          minLength: 1
+          description: Texto da mensagem (até 1000 caracteres).
+          maxLength: 1000
+    PatchedUsuarioAtualizacaoRequest:
+      type: object
+      description: Atualização dos próprios dados. O e-mail e o perfil não podem ser
+        alterados aqui.
+      properties:
+        nome:
+          type: string
+          minLength: 2
+          maxLength: 120
+        telefone:
+          type: string
+          minLength: 1
+          maxLength: 30
+    RedefinirSenhaRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 180
+        codigo:
+          type: string
+          minLength: 1
+          description: Código de 6 dígitos recebido por e-mail.
+          pattern: ^\d{6}$
+        nova_senha:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+      required:
+      - codigo
+      - email
+      - nova_senha
+    ResumoLogins:
+      type: object
+      properties:
+        periodo_dias:
+          type: integer
+        total_logins:
+          type: integer
+        logins_realizados:
+          type: integer
+        falhas_de_login:
+          type: integer
+        ultimo_acesso:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - falhas_de_login
+      - logins_realizados
+      - periodo_dias
+      - total_logins
+      - ultimo_acesso
+    Saude:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+      - status
+    ServicoEnum:
+      enum:
+      - NOIVAS
+      - AUDIOVISUAL
+      - CORTE_CABELO
+      - CARACTERIZACAO
+      - OUTROS
+      type: string
+      description: |-
+        * `NOIVAS` - Noivas
+        * `AUDIOVISUAL` - Audiovisual
+        * `CORTE_CABELO` - Corte de cabelo
+        * `CARACTERIZACAO` - Caracterização
+        * `OUTROS` - Outros
+    StatusEnum:
+      enum:
+      - SUCESSO
+      - FALHA
+      type: string
+      description: |-
+        * `SUCESSO` - Sucesso
+        * `FALHA` - Falha
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    TokensRenovados:
+      type: object
+      properties:
+        access:
+          type: string
+          description: Novo token de acesso.
+        refresh:
+          type: string
+          description: Novo token de atualização (o anterior deixa de valer).
+      required:
+      - access
+      - refresh
+    Usuario:
+      type: object
+      description: Dados públicos de um usuário (nunca inclui a senha).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nome:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        telefone:
+          type: string
+          readOnly: true
+        perfil:
+          type: string
+          readOnly: true
+        criado_em:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - criado_em
+      - email
+      - id
+      - nome
+      - perfil
+      - telefone
+    UsuarioAtualizacaoRequest:
+      type: object
+      description: Atualização dos próprios dados. O e-mail e o perfil não podem ser
+        alterados aqui.
+      properties:
+        nome:
+          type: string
+          minLength: 2
+          maxLength: 120
+        telefone:
+          type: string
+          minLength: 1
+          maxLength: 30
+      required:
+      - nome
+      - telefone
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+tags:
+- name: Autenticação
+  description: Cadastro, login, renovação de token, logout e recuperação de senha.
+- name: Usuários
+  description: Dados do usuário autenticado.
+- name: Mensagens
+  description: Formulário de contato / solicitação de serviços (exige login).
+- name: Depoimentos
+  description: Depoimentos de clientes (leitura pública; escrita só ADMIN).
+- name: Administração
+  description: Gestão de usuários e histórico de logins (somente ADMIN).
+- name: Sistema
+  description: Verificação de disponibilidade.
